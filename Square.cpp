@@ -1,5 +1,5 @@
 #pragma once
-#include "square.h"
+#include "square.hpp"
 
 Square::Square() 
 {
