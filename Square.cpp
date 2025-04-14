@@ -6,8 +6,8 @@ Square::Square()
 	width = height = 0.0f;
 }
 
-Square::Square(float width, float height)
+Square::Square(double width )
 {
 	this->SetWidth(width);
-	this->SetHeight(height);
+	this->SetHeight(width);
 }

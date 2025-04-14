@@ -37,6 +37,44 @@ void XSetter(
         x = v.FromJust();
     }
 }
+
+// I'm not sure that I should be using a v8::Local as a global variable. Let's
+//consider this to be incorrect. It works, but being fucntional is a necessary
+// but not sufficient requirement.
+v8::Local<v8::ObjectTemplate> square_templ;
+
+// Any square objects made in the code will be placed here. 
+std::vector<Square> squareList;
+
+//Creates a square in native code and returns a JavaScript handle to the object.
+void MakeSquareFunction(const v8::FunctionCallbackInfo<v8::Value>& info)
+{
+    v8::HandleScope handle_scope(info.GetIsolate());
+    auto context = info.GetIsolate()->GetCurrentContext();
+    double width = 1;
+    if (info.Length() >= 1)
+    {
+        v8::Maybe<double> size = info[0]->NumberValue(context);
+        if (size.IsJust())
+        {
+            width = size.FromMaybe(width);
+        }
+        Square sq(width);
+        squareList.push_back(sq);
+        v8::MaybeLocal<v8::Object> obj = square_templ->NewInstance(context);
+        if (!obj.IsEmpty())
+        {
+            v8::Local<v8::Object> resolvedObject;
+            if (obj.ToLocal(&resolvedObject))
+            {
+                auto field = v8::External::New(info.GetIsolate(), &squareList[squareList.size() - 1]);
+                resolvedObject->SetInternalField(0, field);
+                info.GetReturnValue().Set(resolvedObject);
+            }
+        }
+    }
+}
+
 // Implementing a static global function that will be available in the 
 // JavaScript environment. This implementation accepts any number of 
 // parameters, including zero parameters. It reads the actual number of params
@@ -46,9 +84,9 @@ void XSetter(
 void PrintFunction(const v8::FunctionCallbackInfo<v8::Value>& info)
 {
     bool first = true;
+    v8::HandleScope handle_scope(info.GetIsolate());
     for (int i = 0; i < info.Length(); ++i)
-    {
-        v8::HandleScope handle_scope(info.GetIsolate());
+    {        
         if (first)
         {
             first = false;
@@ -151,12 +189,15 @@ int wmain(int argc, wchar_t** argv)
         v8::Local<v8::ObjectTemplate> global_templ = v8::ObjectTemplate::New(isolate_);
         global_templ->SetNativeDataProperty(v8::String::NewFromUtf8Literal(isolate_, "x"), XGetter, XSetter);
         global_templ->Set(isolate_, "print", v8::FunctionTemplate::New(isolate_, PrintFunction));
-        
-        Square sq(10, 15);
+        global_templ->Set(isolate_, "makeSquare", v8::FunctionTemplate::New(isolate_, MakeSquareFunction));
+       
 
-        v8::Local<v8::ObjectTemplate> square_templ = v8::ObjectTemplate::New(isolate_);
+
+        /*v8::Local<v8::ObjectTemplate>*/ square_templ = v8::ObjectTemplate::New(isolate_);
         square_templ->SetInternalFieldCount(1);
         square_templ->SetNativeDataProperty(v8::String::NewFromUtf8Literal(isolate_, "width"), SquareWidthGetter, SquareWidthSetter);
+
+
 
         
 
@@ -195,10 +236,29 @@ int wmain(int argc, wchar_t** argv)
         "x = mx * x;"
         "print(x,'test');"
         "return x;})()"*/
-        
-        v8::Local<v8::Script> script =
-            v8::Script::Compile(context, sourceCode).ToLocalChecked();
+        v8::TryCatch trycatch(isolate_);
+        v8::Local<v8::Script> script;
+
+        v8::MaybeLocal<v8::Script> maybeScript = v8::Script::Compile(context, sourceCode);
+        if (!maybeScript.IsEmpty())
+        {
+            script = maybeScript.ToLocalChecked();
+        } 
+        else
+        {
+            //Something catastrophic happened. Not sure what to do here.
+        }
+
+        //We could have gotten this far even with a syntax error.
+        //How do we detect this before the script runs, or capture
+        //the error that rises after it runs?
         v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();
+        if (result.IsEmpty()) {
+            //Something bad happened
+            v8::Local<v8::Value> exc = trycatch.Exception();
+            v8::String::Utf8Value exception_str(isolate_, exc);
+            std::cout << *exception_str << std::endl;
+        }
         v8::MaybeLocal<v8::String> resultString = result->ToString(context);
         v8::Local<v8::String> resolvedString;
         if (!resultString.ToLocal(&resolvedString))

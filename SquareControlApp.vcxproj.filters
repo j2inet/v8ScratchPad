@@ -26,10 +26,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="v8_options.h">
+    <ClInclude Include="v8_options.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="square.h">
+    <ClInclude Include="square.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

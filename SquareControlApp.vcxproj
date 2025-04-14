@@ -140,8 +140,8 @@
     <ClCompile Include="SquareControlApp.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="square.h" />
-    <ClInclude Include="v8_options.h" />
+    <ClInclude Include="square.hpp" />
+    <ClInclude Include="v8_options.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="testScript.js">
