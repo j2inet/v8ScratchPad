@@ -4,13 +4,21 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include "v8_options.h"
-#include "square.h"
+#include "v8_options.hpp"
+#include "square.hpp"
 
 
 v8::Global<v8::Context> currentContext;
 v8::Isolate* isolate_;
 
+
+// Implementing a global variable named X that will be available in the 
+// JavaScript environment. The variable is an integer. Whenever the variable
+// is read or written to, the C++ code below is invoked. In addition to 
+// enabling the two environments to share information, this could be used to 
+// invoke other functionality. Ex: If this variable were for the position of a
+// window, then the C++ code could perform the additional tasks needed to move
+// the window.
 int static x = -1;
 void XGetter(
     v8::Local<v8::Name> propertyName, 
@@ -29,7 +37,12 @@ void XSetter(
         x = v.FromJust();
     }
 }
-
+// Implementing a static global function that will be available in the 
+// JavaScript environment. This implementation accepts any number of 
+// parameters, including zero parameters. It reads the actual number of params
+// from the `Length()` accessor of the `info` parameter. All values are 
+// converted to strings and then printed to the console.Null values are not
+// written
 void PrintFunction(const v8::FunctionCallbackInfo<v8::Value>& info)
 {
     bool first = true;
@@ -98,14 +111,20 @@ void SquareWidthSetter(
     }
 }
 
-
+// Because I tend to use wide characters by default, I'm using wmain instead
+// of main.
 int wmain(int argc, wchar_t** argv)
 {
+    //Personal preference, I move the arguments from the array of pointers
+    //to safer structures to minimize working with pointers whenever possible.
+    //This is in furtherence of safer code and less need to debug.
     std::vector<std::wstring> argList(argc);
     for (auto i = 0; i < argc; ++i)
     {
         argList.push_back(std::wstring(argv[0]));
     }
+    //Though I prefer wide characters, v8 requires utf8 for many functions. I'm
+    //converting the first argument to utf8 to call a v8 function.
     std::string firstArgument = std::string( argList[0].begin(), argList[0].end());
     v8::V8::InitializeICUDefaultLocation(firstArgument.c_str());
     v8::V8::InitializeExternalStartupData(firstArgument.c_str());
