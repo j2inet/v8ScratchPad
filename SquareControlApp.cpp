@@ -1,0 +1,207 @@
+// SquareControlApp.cpp : This file contains the 'main' function. Program execution begins and ends there.
+//
+#define _ITERATOR_DEBUG_LEVEL 0
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include "v8_options.h"
+#include "square.h"
+
+
+v8::Global<v8::Context> currentContext;
+v8::Isolate* isolate_;
+
+int static x = -1;
+void XGetter(
+    v8::Local<v8::Name> propertyName, 
+    const v8::PropertyCallbackInfo<v8::Value>& info) {
+    info.GetReturnValue().Set(x);
+}
+
+void XSetter(
+    v8::Local<v8::Name> propertyName,
+    v8::Local<v8::Value> value, 
+    const v8::PropertyCallbackInfo<void>& info)
+{
+    auto  v = value->Int32Value(currentContext.Get(isolate_));
+    if (v.IsJust())
+    {
+        x = v.FromJust();
+    }
+}
+
+void PrintFunction(const v8::FunctionCallbackInfo<v8::Value>& info)
+{
+    bool first = true;
+    for (int i = 0; i < info.Length(); ++i)
+    {
+        v8::HandleScope handle_scope(info.GetIsolate());
+        if (first)
+        {
+            first = false;
+        }
+        else
+        {
+            std::wcout << L" ";
+        }
+        auto itemStringValue = info[i]->ToString(info.GetIsolate()->GetCurrentContext());
+        if (!itemStringValue.IsEmpty())
+        {
+            v8::Local<v8::String> localStringValue = itemStringValue.ToLocalChecked();
+            
+            std::vector<char> buffer(localStringValue->Length());
+            localStringValue->WriteUtf8(info.GetIsolate(), buffer.data(), buffer.size());
+            std::string printableString(buffer.data(), localStringValue->Length());
+            std::cout << printableString;
+        }
+    }
+    std::cout << std::endl;
+}
+
+
+void SquareFunction(const v8::FunctionCallbackInfo<v8::Value>& args)
+{
+    v8::Isolate* isolate = args.GetIsolate();
+    args.GetReturnValue().Set(v8::String::NewFromUtf8Literal(isolate, "This function is not for returning values"));
+}
+
+void SquareWidthGetter(
+    v8::Local<v8::Name> propertyName,  
+    const v8::PropertyCallbackInfo<v8::Value>& info)
+{
+    v8::Local<v8::Object> self = info.Holder();
+    v8::Local<v8::External> wrap = self->GetInternalField(0).As<v8::Value>().As<v8::External>();
+    //v8::Local<v8::External> wrap = v8::Local<v8::External>::Cast(self->GetInternalField(0));
+    void* ptr = wrap->Value();
+    float value = static_cast<Square*>(ptr)->GetWidth();
+    info.GetReturnValue().Set(value);
+}
+
+void SquareWidthSetter(
+    v8::Local<v8::Name> propertyName, 
+    v8::Local<v8::Value> value, 
+    const v8::PropertyCallbackInfo<void>& info)
+{
+    auto numberValue = value->NumberValue(currentContext.Get(isolate_));
+    if (numberValue.IsJust())
+    {
+        v8::Local<v8::Object> self = info.Holder();
+        v8::Local<v8::Data> internalField = self->GetInternalField(0);
+        if (internalField->IsValue())
+        {
+            v8::Local<v8::Value> internalValue = v8::Local<v8::Value>::Cast(internalField);
+        }
+        //v8::Local<v8::External> wrap = v8::Local<v8::External>::Cast(internalField);
+        v8::Local<v8::External> wrap = self->GetInternalField(0).As<v8::Value>().As<v8::External>();
+        void* ptr = wrap->Value();
+        static_cast<Square*>(ptr)->SetWidth(numberValue.FromJust());
+    }
+}
+
+
+int wmain(int argc, wchar_t** argv)
+{
+    std::vector<std::wstring> argList(argc);
+    for (auto i = 0; i < argc; ++i)
+    {
+        argList.push_back(std::wstring(argv[0]));
+    }
+    std::string firstArgument = std::string( argList[0].begin(), argList[0].end());
+    v8::V8::InitializeICUDefaultLocation(firstArgument.c_str());
+    v8::V8::InitializeExternalStartupData(firstArgument.c_str());
+    std::unique_ptr<v8::Platform> platform = v8::platform::NewDefaultPlatform();
+    v8::V8::InitializePlatform(platform.get());
+    v8::V8::Initialize();
+
+    v8::Isolate::CreateParams create_params;
+    create_params.array_buffer_allocator =
+        v8::ArrayBuffer::Allocator::NewDefaultAllocator();
+    isolate_ = v8::Isolate::New(create_params);
+    {
+/*
+        v8::Local<v8::FunctionTemplate> squareTemplate = v8::FunctionTemplate::New(isolate_);
+        squareTemplate->Set(isolate_, "Square", v8::FunctionTemplate::New(isolate_, SquareFunction));
+        squareTemplate->PrototypeTemplate()->Set(
+            v8::String::NewFromUtf8(isolate_,"Square"),
+            v8::FunctionTemplate::New(isolate_, SquareMethodCallback)->GetFunction()
+        );
+  */      
+        v8::Isolate::Scope isolate_scope(isolate_);
+        v8::HandleScope handle_scope(isolate_);
+
+        v8::Local<v8::ObjectTemplate> global_templ = v8::ObjectTemplate::New(isolate_);
+        global_templ->SetNativeDataProperty(v8::String::NewFromUtf8Literal(isolate_, "x"), XGetter, XSetter);
+        global_templ->Set(isolate_, "print", v8::FunctionTemplate::New(isolate_, PrintFunction));
+        
+        Square sq(10, 15);
+
+        v8::Local<v8::ObjectTemplate> square_templ = v8::ObjectTemplate::New(isolate_);
+        square_templ->SetInternalFieldCount(1);
+        square_templ->SetNativeDataProperty(v8::String::NewFromUtf8Literal(isolate_, "width"), SquareWidthGetter, SquareWidthSetter);
+
+        
+
+        // Create a new context.
+        v8::Local<v8::Context> context = v8::Context::New(isolate_, NULL, global_templ);
+        currentContext.Reset(isolate_, context);
+        v8::Context::Scope context_scope(context);
+
+    /*
+        Square square1, square2;
+        v8::Local<v8::Object> square_1 = square_templ->NewInstance(context).ToLocalChecked();
+        v8::Local<v8::Object> square_2 = square_templ->NewInstance(context).ToLocalChecked();
+            auto v1 = v8::External::New(isolate_, &square1);
+            square_1->SetInternalField(0, v8::External::New(isolate_, &square1));
+            square_2->SetInternalField(0, v8::External::New(isolate_, &square2));
+            global_templ->SetNativeDataProperty(v8::String::NewFromUtf8Literal(isolate_, "sq1"))
+      */  
+        // Enter the context for compiling and running the hello world script.
+
+        std::string scriptString;
+        std::ifstream scriptSourceFile("testScript.js");
+        if (!scriptSourceFile.is_open())
+        {
+            return -1;
+        }
+        std::stringstream buffer;
+        buffer << scriptSourceFile.rdbuf();
+        std::string scriptSource= buffer.str();
+        //char script[8];
+        v8::Local<v8::String> sourceCode;
+        v8::String::NewFromUtf8(isolate_, scriptSource.c_str(), v8::NewStringType::kNormal, scriptSource.length()).ToLocal(&sourceCode);;
+        // v8::String::NewFromUtf8Literal(isolate_, scriptSource.c_str(), v8::NewStringType::kNormal, scriptSource.length());
+        /*"(function(){x = 5;"
+        ""
+        "var mx = 2;"
+        "x = mx * x;"
+        "print(x,'test');"
+        "return x;})()"*/
+        
+        v8::Local<v8::Script> script =
+            v8::Script::Compile(context, sourceCode).ToLocalChecked();
+        v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();
+        v8::MaybeLocal<v8::String> resultString = result->ToString(context);
+        v8::Local<v8::String> resolvedString;
+        if (!resultString.ToLocal(&resolvedString))
+        {
+            v8::String::Utf8Value utf8(isolate_, resolvedString);
+            std::string retVal(*utf8);
+            std::cout << "Result " << retVal << std::endl;
+        }
+        else
+        {
+            std::cout << "No value returned" << std::endl;
+        }
+        std::cout << "Final value of X:" << x << std::endl;
+
+    }
+    // Dispose the isolate and tear down V8.
+    currentContext.Reset();
+    isolate_->Dispose();
+    v8::V8::Dispose();
+    v8::V8::DisposePlatform();
+    delete create_params.array_buffer_allocator;
+    return 0;
+}
+
+
